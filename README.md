@@ -1,6 +1,6 @@
-# Government National Security Economic Risk Dashboard
+# ATLAS: National Economic Resilience Intelligence
 
-An advanced, interactive web application designed for government officials to perform comprehensive national security economic risk assessments. Features real-time global data integration, interactive scenario analysis, automated alerts, and powerful export capabilities.
+ATLAS is an explainable macro-financial and bank-operations intelligence platform for assessing national economic resilience. It combines public World Bank indicators, daily FX reference data, transparent screening rules, stress scenarios, and auditable exports in a professional decision-support workflow.
 
 ## 🚀 Key Features
 
@@ -125,7 +125,28 @@ npm start
 
 5. **Access the dashboard**:
    - Open [http://localhost:3000](http://localhost:3000)
-   - Login with government credentials
+   - No sign-in is configured in this public-data prototype.
+
+### Open with the VS Code Live Server extension
+
+Live Server is a static file server and cannot compile the React source in `public/index.html`. Build the app first, then open the compiled page:
+
+1. In VS Code, run **Tasks: Run Task** → **Prepare ATLAS for Live Server** (or run `npm run build` in the terminal).
+2. In the Explorer, right-click `build/index.html` and select **Open with Live Server**.
+
+Do not open `public/index.html` with Live Server; it is a build template and will display a blank page. The build uses relative asset paths so it also works when served at `/build/`.
+
+## Application pages and assistant
+
+The dashboard includes a risk overview, a multi-horizon analysis page, and an analyst chat. Monthly, weekly, daily, hourly, and per-minute horizons are selectable. Connected economic indicators are annual; the FX feed provides a daily reference snapshot, not historical daily prices. The app marks unsupported frequencies as unavailable rather than generating synthetic readings. Hourly and per-minute analysis requires a separately connected data provider.
+
+The analyst works in free local mode without API credentials, answering from the dashboard's currently loaded public data. To enable OpenAI responses during development:
+
+1. Set `OPENAI_API_KEY` in the environment of the server process. Do not prefix it with `REACT_APP_` or put it in browser code.
+2. Start the chat proxy in one terminal with `npm run server`.
+3. Start the React app in another terminal with `npm start`.
+
+OpenAI API access is optional and may incur usage charges; it is not a free ChatGPT subscription. In production, deploy the chat proxy behind an appropriately secured server-side route and manage the key through a secret manager.
 
 ### Production Deployment
 
