@@ -1,6 +1,12 @@
+<<<<<<< HEAD
 # ATLAS: National Economic Resilience Intelligence
 
 ATLAS is an explainable macro-financial and bank-operations intelligence platform for assessing national economic resilience. It combines public World Bank indicators, daily FX reference data, transparent screening rules, stress scenarios, and auditable exports in a professional decision-support workflow.
+=======
+# Government National Security Economic Risk Dashboard
+
+An advanced, interactive web application designed for government officials to perform comprehensive national security economic risk assessments. Features real-time global data integration, interactive scenario analysis, automated alerts, and powerful export capabilities.
+>>>>>>> origin/main
 
 ## 🚀 Key Features
 
@@ -125,6 +131,7 @@ npm start
 
 5. **Access the dashboard**:
    - Open [http://localhost:3000](http://localhost:3000)
+<<<<<<< HEAD
    - No sign-in is configured in this public-data prototype.
 
 ### Open with the VS Code Live Server extension
@@ -147,6 +154,9 @@ The analyst works in free local mode without API credentials, answering from the
 3. Start the React app in another terminal with `npm start`.
 
 OpenAI API access is optional and may incur usage charges; it is not a free ChatGPT subscription. In production, deploy the chat proxy behind an appropriately secured server-side route and manage the key through a secret manager.
+=======
+   - Login with government credentials
+>>>>>>> origin/main
 
 ### Production Deployment
 
