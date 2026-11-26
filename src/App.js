@@ -34,6 +34,7 @@ import * as XLSX from 'xlsx';
 import AnalystChat from './components/AnalystChat';
 import Methodology from './components/Methodology';
 import TimeAnalysis from './components/TimeAnalysis';
+import { fetchWorldBank } from './utils/worldBank';
 
 const API_BASE = '/api/worldbank/v2';
 const FX_API = '/api/fx/v1/latest?from=USD&to=EUR,GBP,JPY,CHF,CAD,AUD,CNY,INR,BRL,ZAR';
@@ -180,7 +181,7 @@ const SCENARIOS = [
 const clamp = (value) => Math.max(0, Math.min(10, value));
 
 async function fetchCountries(signal) {
-  const response = await fetch(`${API_BASE}/country?format=json&per_page=400`, { signal });
+  const response = await fetchWorldBank(`${API_BASE}/country?format=json&per_page=400`, signal);
   if (!response.ok) throw new Error(`Country directory request failed (${response.status})`);
   const payload = await response.json();
   if (!Array.isArray(payload?.[1])) throw new Error('Country directory response was invalid');
@@ -198,7 +199,7 @@ async function fetchCountries(signal) {
 
 async function fetchIndicator(indicator, locationCode, signal) {
   const url = `${API_BASE}/country/${locationCode}/indicator/${indicator.code}?format=json&per_page=30&date=2010:2026`;
-  const response = await fetch(url, { signal });
+  const response = await fetchWorldBank(url, signal);
   if (!response.ok) throw new Error(`${indicator.name} request failed (${response.status})`);
   const payload = await response.json();
   if (!Array.isArray(payload?.[1])) throw new Error(`${indicator.name} response was invalid`);
