@@ -31,4 +31,24 @@ describe('fetchWorldBank', () => {
     await expect(fetchWorldBank('/api/worldbank/v2/country', undefined)).resolves.toBe(response);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it('uses the public World Bank API directly in production builds', async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    const response = { status: 200 };
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValueOnce(response);
+    const url = '/api/worldbank/v2/country?format=json';
+
+    try {
+      await expect(fetchWorldBank(url, undefined)).resolves.toBe(response);
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.worldbank.org/v2/country?format=json',
+      { signal: undefined },
+    );
+  });
 });
