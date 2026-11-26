@@ -1,28 +1,17 @@
 {
-<<<<<<< HEAD
   "name": "atlas-national-economic-resilience-intelligence",
   "version": "1.0.0",
   "homepage": ".",
-=======
-  "name": "explainable-ai-national-security-economic-risk-dashboard",
-  "version": "1.0.0",
->>>>>>> origin/main
   "description": "A web application providing explainable AI insights for national security economic risk assessment",
   "main": "src/index.js",
   "scripts": {
     "start": "react-scripts start",
-<<<<<<< HEAD
     "server": "node server.js",
-=======
->>>>>>> origin/main
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
-<<<<<<< HEAD
   "proxy": "http://localhost:3001",
-=======
->>>>>>> origin/main
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
