@@ -34,6 +34,7 @@ import * as XLSX from 'xlsx';
 import AnalystChat from './components/AnalystChat';
 import Methodology from './components/Methodology';
 import TimeAnalysis from './components/TimeAnalysis';
+import { getCountryOptions, REGIONS } from './config/geography';
 import { fetchWorldBank } from './utils/worldBank';
 
 const API_BASE = '/api/worldbank/v2';
@@ -49,18 +50,6 @@ const FX_CURRENCIES = [
   { code: 'INR', name: 'Indian rupee' },
   { code: 'BRL', name: 'Brazilian real' },
   { code: 'ZAR', name: 'South African rand' },
-];
-
-const REGIONS = [
-  { code: 'WLD', name: 'Global', shortName: 'World' },
-  { code: 'AFR', name: 'Africa', shortName: 'Africa' },
-  { code: 'EAS', name: 'East Asia & Pacific', shortName: 'East Asia & Pacific' },
-  { code: 'SAS', name: 'South Asia', shortName: 'South Asia' },
-  { code: 'ECS', name: 'Europe & Central Asia', shortName: 'Europe & Central Asia' },
-  { code: 'LCN', name: 'Latin America & Caribbean', shortName: 'Latin America & Caribbean' },
-  { code: 'MNA', name: 'Middle East & North Africa', shortName: 'Middle East & North Africa' },
-  { code: 'NAC', name: 'North America', shortName: 'North America' },
-  { code: 'SSF', name: 'Sub-Saharan Africa', shortName: 'Sub-Saharan Africa' },
 ];
 
 const INDICATORS = [
@@ -444,7 +433,7 @@ function App() {
     return [...seriesByYear.values()].sort((left, right) => Number(left.year) - Number(right.year));
   }, [historyYears, indicatorData]);
 
-  const countryOptions = countries;
+  const countryOptions = getCountryOptions(countries, regionCode);
   const activeScenario = SCENARIOS.find((scenario) => scenario.id === selectedScenario);
   const sourceStatus = loadError
     ? 'SOURCE ERROR'
@@ -467,9 +456,7 @@ function App() {
     setCountryCode(nextCountry?.code || '');
     setSubnationalName('');
     if (nextCountry) {
-      const regionAliases = { SSA: 'SSF', MEA: 'MNA', EAP: 'EAS', ECA: 'ECS', LAC: 'LCN' };
-      const regionCodeForCountry = regionAliases[nextCountry.regionCode] || nextCountry.regionCode;
-      const matchingRegion = REGIONS.find((region) => region.code === regionCodeForCountry);
+      const matchingRegion = REGIONS.find((region) => region.code === nextCountry.regionCode);
       if (matchingRegion) setRegionCode(matchingRegion.code);
     }
   };

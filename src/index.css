@@ -242,8 +242,8 @@ td a:hover { text-decoration: underline; }
 .confidence-block { display: grid; gap: 3px; padding-left: 14px; border-left: 1px solid #e4e9f1; }
 .confidence-block span { color: #8794a6; font-size: 8px; font-weight: 700; letter-spacing: .7px; }
 .confidence-block strong { color: #26725f; font: 700 15px 'Manrope', sans-serif; }
-.confidence-block moderate strong { color: #aa7a31; }
-.confidence-block limited strong { color: #b75050; }
+.confidence-block.moderate strong { color: #aa7a31; }
+.confidence-block.limited strong { color: #b75050; }
 .confidence-block small { color: #94a0af; font-size: 8px; line-height: 1.4; }
 
 .methodology-page { display: grid; gap: 14px; }
