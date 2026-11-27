@@ -88,7 +88,7 @@ function AnalystChat({ context }) {
       setMessages((current) => [...current, { role: 'assistant', content: result.reply }]);
     } catch (error) {
       setProvider('local');
-      setNotice(`Free local analyst mode: ${error.message}. Configure the server-side OpenAI key to enable OpenAI responses.`);
+      setNotice(`Free local analyst mode: ${error.message}`);
       setMessages((current) => [...current, { role: 'assistant', content: getLocalAnswer(text, context) }]);
     } finally {
       setPending(false);

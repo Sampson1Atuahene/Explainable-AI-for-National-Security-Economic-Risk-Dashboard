@@ -38,7 +38,10 @@ import { getCountryOptions, REGIONS } from './config/geography';
 import { fetchWorldBank } from './utils/worldBank';
 
 const API_BASE = '/api/worldbank/v2';
-const FX_API = '/api/fx/v1/latest?from=USD&to=EUR,GBP,JPY,CHF,CAD,AUD,CNY,INR,BRL,ZAR';
+const FX_API_BASE = process.env.NODE_ENV === 'production'
+  ? 'https://api.frankfurter.dev'
+  : '/api/fx';
+const FX_API = `${FX_API_BASE}/v1/latest?base=USD&symbols=EUR,GBP,JPY,CHF,CAD,AUD,CNY,INR,BRL,ZAR`;
 const FX_CURRENCIES = [
   { code: 'EUR', name: 'Euro' },
   { code: 'GBP', name: 'British pound' },
