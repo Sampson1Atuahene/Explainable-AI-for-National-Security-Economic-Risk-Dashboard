@@ -66,11 +66,19 @@ investment recommendation.
 
 ### Time analysis
 
-This page displays the annual World Bank history and the current daily FX
-reference snapshot. Tabs for monthly, weekly, hourly, and per-minute analysis
-explain that those data streams are not connected; the app does not fabricate
-or interpolate high-frequency observations. Daily FX is a current reference
-snapshot, not a stored historical FX time series.
+Monthly, weekly, and daily horizons display a historical USD FX reference-rate
+series fetched from Frankfurter / ECB. Monthly and weekly points use the last
+available business-day rate in each calendar month or week; daily points retain
+the reported business-day observations. The view requests the most recent 365
+days, omits non-business days, and does not interpolate, average, or simulate
+rates. A currency selector changes the series shown in the chart. The daily
+view also includes the current latest-reference snapshot.
+
+The separate macroeconomic chart shows annual World Bank series; it does not
+convert them into monthly observations. Hourly and per-minute tabs remain
+selectable and show an explicit no-feed state because no intraday FX, market,
+payments, or event provider is connected. Daily observations are not
+downsampled into intraday data.
 
 ### Methodology
 

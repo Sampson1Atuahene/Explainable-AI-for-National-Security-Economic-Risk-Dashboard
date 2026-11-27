@@ -3,39 +3,104 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
-import { AlertTriangle, Clock3, HelpCircle, Radio, TrendingUp } from 'lucide-react';
+import { AlertTriangle, Clock3, Radio, TrendingUp } from 'lucide-react';
+import { aggregateFxHistory, fetchFxHistory } from '../utils/fxHistory';
 
 const HORIZONS = [
-  { id: 'monthly', label: 'Monthly', detail: 'Economic indicators' },
-  { id: 'weekly', label: 'Weekly', detail: 'Market & operations' },
-  { id: 'daily', label: 'Daily', detail: 'FX reference rates' },
-  { id: 'hourly', label: 'Hourly', detail: 'Market & event pulse' },
-  { id: 'per-minute', label: 'Per minute', detail: 'Live signal monitor' },
+  { id: 'monthly', label: 'Monthly', detail: 'Monthly FX reference' },
+  { id: 'weekly', label: 'Weekly', detail: 'Weekly FX reference' },
+  { id: 'daily', label: 'Daily', detail: 'Daily FX reference' },
+  { id: 'hourly', label: 'Hourly', detail: 'Not connected' },
+  { id: 'per-minute', label: 'Per minute', detail: 'Not connected' },
 ];
 
-const CURRENCIES = ['EUR', 'GBP', 'JPY', 'CHF', 'CNY'];
+const CURRENCIES = [
+  { code: 'EUR', name: 'Euro' },
+  { code: 'GBP', name: 'British pound' },
+  { code: 'JPY', name: 'Japanese yen' },
+  { code: 'CHF', name: 'Swiss franc' },
+  { code: 'CNY', name: 'Chinese yuan' },
+];
 
-function getAvailability(horizon, fxData) {
-  if (horizon === 'daily') {
+function getAvailability(horizon, observations, historyLoading, historyError, fxData) {
+  if (horizon === 'monthly' || horizon === 'weekly' || horizon === 'daily') {
+    if (historyLoading) return 'Loading historical USD FX reference rates from Frankfurter / ECB…';
+    if (historyError) return `Historical FX reference data could not be loaded: ${historyError}`;
+    if (observations.length) {
+      const periodDescription = horizon === 'monthly'
+        ? 'last available business-day rate in each calendar month'
+        : horizon === 'weekly'
+          ? 'last available business-day rate in each calendar week'
+          : 'daily business-day observations';
+      return `Showing ${observations.length} periods using the ${periodDescription}. Rates are reported per 1 USD; non-business days are omitted, not interpolated.`;
+    }
     return fxData
-      ? `A daily FX reference snapshot is available for ${fxData.date}. Historical daily rates are not stored here.`
-      : 'The daily FX reference feed is unavailable. No historical daily sequence is connected.';
+      ? 'The latest reference snapshot is available, but historical FX observations are not currently available.'
+      : 'Historical and latest FX reference rates are unavailable.';
   }
-  if (horizon === 'monthly') return 'No monthly macroeconomic series are connected. World Bank indicators below are published annually.';
-  if (horizon === 'weekly') return 'No weekly market or operational history is connected. Annual public indicators are not downsampled into weekly readings.';
-  if (horizon === 'hourly') return 'No hourly market, payments or event feed is connected. There are no hourly observations to analyze.';
-  return 'No live market or event stream is connected. Per-minute observations are unavailable and are not simulated.';
+  if (horizon === 'hourly') {
+    return 'No hourly FX, market, payments, or event source is connected. Hourly values are not estimated from daily observations.';
+  }
+  return 'No per-minute FX, market, payments, or event stream is connected. Live observations are not simulated.';
 }
 
 function TimeAnalysis({ chartData, indicatorData, fxData, fxError, locationName }) {
   const [horizon, setHorizon] = React.useState('monthly');
+  const [currency, setCurrency] = React.useState('EUR');
+  const [fxHistory, setFxHistory] = React.useState([]);
+  const [historyLoading, setHistoryLoading] = React.useState(true);
+  const [historyError, setHistoryError] = React.useState('');
+  const tabRefs = React.useRef([]);
   const selectedHorizon = HORIZONS.find((item) => item.id === horizon);
   const observedYears = new Set(chartData.map((item) => item.year)).size;
+  const periodData = React.useMemo(
+    () => aggregateFxHistory(fxHistory, horizon),
+    [fxHistory, horizon],
+  );
+  const selectedRates = periodData.map((point) => ({
+    date: point.date,
+    rate: point.rates[currency],
+  }));
+  const availableSeries = ['monthly', 'weekly', 'daily'].includes(horizon);
+
+  React.useEffect(() => {
+    const controller = new AbortController();
+    setHistoryLoading(true);
+    setHistoryError('');
+    fetchFxHistory(controller.signal)
+      .then((history) => {
+        if (!controller.signal.aborted) setFxHistory(history);
+      })
+      .catch((error) => {
+        if (error.name !== 'AbortError' && !controller.signal.aborted) {
+          setHistoryError(error.message);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setHistoryLoading(false);
+      });
+    return () => controller.abort();
+  }, []);
+
+  const handleTabKeyDown = (event, index) => {
+    let nextIndex;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex = (index + 1) % HORIZONS.length;
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex = (index - 1 + HORIZONS.length) % HORIZONS.length;
+    else if (event.key === 'Home') nextIndex = 0;
+    else if (event.key === 'End') nextIndex = HORIZONS.length - 1;
+    else return;
+
+    event.preventDefault();
+    setHorizon(HORIZONS[nextIndex].id);
+    tabRefs.current[nextIndex]?.focus();
+  };
 
   return (
     <section className="time-analysis-page" aria-label="Time horizon analysis">
@@ -48,13 +113,18 @@ function TimeAnalysis({ chartData, indicatorData, fxData, fxError, locationName 
           <span className="source-pill"><Clock3 size={13} /> {locationName}</span>
         </div>
         <div className="horizon-tabs" role="tablist" aria-label="Analysis time horizon">
-          {HORIZONS.map((item) => (
+          {HORIZONS.map((item, index) => (
             <button
               aria-selected={horizon === item.id}
+              aria-controls="horizon-panel"
               className={`horizon-tab ${horizon === item.id ? 'selected' : ''}`}
+              id={`horizon-tab-${item.id}`}
               key={item.id}
               onClick={() => setHorizon(item.id)}
+              onKeyDown={(event) => handleTabKeyDown(event, index)}
+              ref={(element) => { tabRefs.current[index] = element; }}
               role="tab"
+              tabIndex={horizon === item.id ? 0 : -1}
               type="button"
             >
               <strong>{item.label}</strong>
@@ -65,22 +135,31 @@ function TimeAnalysis({ chartData, indicatorData, fxData, fxError, locationName 
       </div>
 
       <div className="content-grid horizon-content">
-        <section className="panel horizon-status" role="tabpanel">
+        <section
+          aria-labelledby={`horizon-tab-${horizon}`}
+          className="panel horizon-status"
+          id="horizon-panel"
+          role="tabpanel"
+          tabIndex={0}
+        >
           <div className="panel-heading">
             <div>
               <p className="eyebrow">{selectedHorizon.label.toUpperCase()} ANALYSIS</p>
               <h2>{selectedHorizon.detail}</h2>
             </div>
-            {horizon === 'daily' && fxData ? <span className="source-pill"><span className="status-dot" /> Snapshot available</span> : <span className="source-pill unavailable-pill"><AlertTriangle size={13} /> Feed not connected</span>}
+            {availableSeries && !historyError && (fxHistory.length || historyLoading)
+              ? <span className="source-pill"><span className={`status-dot ${historyLoading ? 'offline' : ''}`} />{historyLoading ? 'Loading reference history' : 'Frankfurter / ECB'}</span>
+              : <span className="source-pill unavailable-pill"><AlertTriangle size={13} />{availableSeries ? 'History unavailable' : 'Feed not connected'}</span>}
           </div>
-          <p className="horizon-explanation">{getAvailability(horizon, fxData)}</p>
+          <p aria-live="polite" className="horizon-explanation">{getAvailability(horizon, periodData, historyLoading, historyError, fxData)}</p>
 
           {horizon === 'daily' && fxData && (
             <div className="fx-grid horizon-fx-grid">
-              {CURRENCIES.map((code) => (
+              {CURRENCIES.map(({ code, name }) => (
                 <article className="fx-tile" key={code}>
                   <span>{code}</span>
                   <strong>{fxData.rates[code]?.toLocaleString(undefined, { maximumFractionDigits: 4 }) ?? 'No data'}</strong>
+                  <small>{name}</small>
                   <small>per 1 USD</small>
                   <em>Reference rate · {fxData.date}</em>
                 </article>
@@ -89,12 +168,46 @@ function TimeAnalysis({ chartData, indicatorData, fxData, fxError, locationName 
           )}
           {horizon === 'daily' && fxError && !fxData && <div className="error-banner"><AlertTriangle size={15} />{fxError}</div>}
 
-          {horizon !== 'daily' && (
+          {availableSeries && (
+            <section className="fx-history-panel" aria-label={`${selectedHorizon.label} FX reference history`}>
+              <div className="fx-history-controls">
+                <label htmlFor="fx-history-currency">Currency per USD</label>
+                <select
+                  id="fx-history-currency"
+                  aria-label="FX history currency"
+                  onChange={(event) => setCurrency(event.target.value)}
+                  value={currency}
+                >
+                  {CURRENCIES.map(({ code, name }) => <option key={code} value={code}>{code} · {name}</option>)}
+                </select>
+                <span>Last 12 months · {selectedHorizon.label.toLowerCase()} period end</span>
+              </div>
+              {historyLoading ? (
+                <div className="empty-chart" role="status">Loading observed reference rates…</div>
+              ) : historyError ? (
+                <div className="fx-history-error" role="alert"><AlertTriangle size={15} />{historyError}</div>
+              ) : selectedRates.length ? (
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={selectedRates} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
+                    <CartesianGrid stroke="#e9eef5" strokeDasharray="3 5" vertical={false} />
+                    <XAxis dataKey="date" tick={{ fill: '#8290a4', fontSize: 10 }} axisLine={false} tickLine={false} minTickGap={28} />
+                    <YAxis domain={['auto', 'auto']} tick={{ fill: '#8290a4', fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <Tooltip formatter={(value) => [`${Number(value).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${currency} per USD`, 'Reference rate']} />
+                    <Line type="monotone" dataKey="rate" name={`${currency} per USD`} stroke="#2784ef" strokeWidth={2} dot={false} activeDot={{ r: 4 }} connectNulls={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="empty-chart">No historical FX observations are available for this period.</div>
+              )}
+            </section>
+          )}
+
+          {!availableSeries && (
             <div className="resolution-notice">
-              {horizon === 'per-minute' || horizon === 'hourly' ? <Radio size={17} /> : <HelpCircle size={17} />}
+              <Radio size={17} />
               <div>
-                <strong>No {selectedHorizon.label.toLowerCase()} data source is configured</strong>
-                <p>Connect a licensed, appropriately governed data provider to enable this horizon. The dashboard will not invent or interpolate observations.</p>
+                <strong>{selectedHorizon.label} data is not connected</strong>
+                <p>Connect a licensed, appropriately governed intraday data provider to enable this horizon. Daily FX rates are not downsampled or interpolated into {selectedHorizon.label.toLowerCase()} observations.</p>
               </div>
             </div>
           )}
@@ -117,8 +230,8 @@ function TimeAnalysis({ chartData, indicatorData, fxData, fxError, locationName 
             <strong>{observedYears} annual periods</strong>
           </div>
           <div className="resolution-row">
-            <span>FX reference snapshot</span>
-            <strong>{fxData ? `Daily · ${fxData.date}` : 'Unavailable'}</strong>
+            <span>FX reference history</span>
+            <strong>{historyLoading ? 'Loading' : historyError ? 'Unavailable' : `${fxHistory.length} daily observations`}</strong>
           </div>
           <div className="resolution-row">
             <span>Hourly / minute streams</span>
