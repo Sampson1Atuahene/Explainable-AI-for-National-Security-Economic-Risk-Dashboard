@@ -80,7 +80,7 @@ function TimeAnalysis({ chartData, indicatorData, fxData, fxError, locationName 
               {CURRENCIES.map((code) => (
                 <article className="fx-tile" key={code}>
                   <span>{code}</span>
-                  <strong>{fxData.rates[code]?.toLocaleString(undefined, { maximumFractionDigits: 4 }) ?? '—'}</strong>
+                  <strong>{fxData.rates[code]?.toLocaleString(undefined, { maximumFractionDigits: 4 }) ?? 'No data'}</strong>
                   <small>per 1 USD</small>
                   <em>Reference rate · {fxData.date}</em>
                 </article>

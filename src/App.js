@@ -31,17 +31,14 @@ import {
 import toast, { Toaster } from 'react-hot-toast';
 import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
-import AnalystChat from './components/AnalystChat';
+import About from './components/About';
 import Methodology from './components/Methodology';
 import TimeAnalysis from './components/TimeAnalysis';
 import { getCountryOptions, REGIONS } from './config/geography';
 import { fetchWorldBank } from './utils/worldBank';
 
-const API_BASE = '/api/worldbank/v2';
-const FX_API_BASE = process.env.NODE_ENV === 'production'
-  ? 'https://api.frankfurter.dev'
-  : '/api/fx';
-const FX_API = `${FX_API_BASE}/v1/latest?base=USD&symbols=EUR,GBP,JPY,CHF,CAD,AUD,CNY,INR,BRL,ZAR`;
+const API_BASE = 'https://api.worldbank.org/v2';
+const FX_API = 'https://api.frankfurter.dev/v1/latest?from=USD&to=EUR,GBP,JPY,CHF,CAD,AUD,CNY,INR,BRL,ZAR';
 const FX_CURRENCIES = [
   { code: 'EUR', name: 'Euro' },
   { code: 'GBP', name: 'British pound' },
@@ -56,6 +53,46 @@ const FX_CURRENCIES = [
 ];
 
 const INDICATORS = [
+  {
+    key: 'npl',
+    name: 'Bank NPLs',
+    code: 'FB.AST.NPER.ZS',
+    unit: '%',
+    decimals: 1,
+    category: 'Banking',
+    description: 'Nonperforming loans as a share of gross loans',
+    risk: (value) => clamp(value),
+    weight: 0.2,
+  },
+  {
+    key: 'capitalAdequacy',
+    name: 'Capital adequacy',
+    code: 'FB.BNK.CAPA.ZS',
+    unit: '%',
+    decimals: 1,
+    category: 'Banking',
+    description: 'Regulatory capital to risk-weighted assets',
+    risk: (value) => clamp((15 - value) * 0.7),
+    weight: 0.1,
+  },
+  {
+    key: 'privateCredit',
+    name: 'Private credit',
+    code: 'FS.AST.PRVT.GD.ZS',
+    unit: '% GDP',
+    decimals: 1,
+    category: 'Banking',
+    description: 'Domestic credit to the private sector',
+  },
+  {
+    key: 'lendingRate',
+    name: 'Lending rate',
+    code: 'FR.INR.LEND',
+    unit: '%',
+    decimals: 1,
+    category: 'Rates',
+    description: 'Bank lending rate',
+  },
   {
     key: 'gdpGrowth',
     name: 'GDP growth',
@@ -101,46 +138,6 @@ const INDICATORS = [
     weight: 0.1,
   },
   {
-    key: 'lendingRate',
-    name: 'Lending rate',
-    code: 'FR.INR.LEND',
-    unit: '%',
-    decimals: 1,
-    category: 'Rates',
-    description: 'Bank lending rate',
-  },
-  {
-    key: 'npl',
-    name: 'Bank NPLs',
-    code: 'FB.AST.NPER.ZS',
-    unit: '%',
-    decimals: 1,
-    category: 'Banking',
-    description: 'Nonperforming loans as a share of gross loans',
-    risk: (value) => clamp(value),
-    weight: 0.2,
-  },
-  {
-    key: 'capitalAdequacy',
-    name: 'Capital adequacy',
-    code: 'FB.BNK.CAPA.ZS',
-    unit: '%',
-    decimals: 1,
-    category: 'Banking',
-    description: 'Regulatory capital to risk-weighted assets',
-    risk: (value) => clamp((15 - value) * 0.7),
-    weight: 0.1,
-  },
-  {
-    key: 'privateCredit',
-    name: 'Private credit',
-    code: 'FS.AST.PRVT.GD.ZS',
-    unit: '% GDP',
-    decimals: 1,
-    category: 'Banking',
-    description: 'Domestic credit to the private sector',
-  },
-  {
     key: 'reserves',
     name: 'FX reserves',
     code: 'FI.RES.TOTL.CD',
@@ -162,14 +159,6 @@ const INDICATORS = [
   },
 ];
 
-const SCENARIOS = [
-  { id: 'baseline', name: 'Baseline', description: 'Use reported observations without adjustments.' },
-  { id: 'recession', name: 'Recession', description: 'GDP −3pp; unemployment +2pp; NPLs +1pp.' },
-  { id: 'trade', name: 'Trade disruption', description: 'Inflation +1.5pp; current account −2pp of GDP.' },
-  { id: 'cyber', name: 'Cyber outage', description: 'Operational stress; macro indicators remain unchanged.' },
-  { id: 'disaster', name: 'Severe weather', description: 'GDP −1pp; inflation and unemployment +0.5pp.' },
-];
-
 const clamp = (value) => Math.max(0, Math.min(10, value));
 
 async function fetchCountries(signal) {
@@ -182,7 +171,7 @@ async function fetchCountries(signal) {
     .filter((country) => country.region?.value && country.region.value !== 'Aggregates')
     .map((country) => ({
       code: country.id,
-      name: country.name,
+      name: country.id === 'NRU' ? 'Nauru' : country.name,
       region: country.region.value.trim(),
       regionCode: country.region.id,
     }))
@@ -236,7 +225,7 @@ function getScreeningSignal(indicators) {
 }
 
 function formatValue(indicator, value) {
-  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  if (value === null || value === undefined || !Number.isFinite(value)) return 'No data';
   if (indicator.key === 'reserves') {
     const trillions = value / 1e12;
     if (Math.abs(trillions) >= 1) return `$${trillions.toFixed(2)}T`;
@@ -254,12 +243,12 @@ function getRiskTone(score) {
 function App() {
   const [activePage, setActivePage] = useState(() => {
     const initialPage = window.location.hash.slice(1);
-    return ['analysis', 'assistant', 'methodology'].includes(initialPage) ? initialPage : 'overview';
+    return ['analysis', 'methodology', 'about'].includes(initialPage) ? initialPage : 'overview';
   });
   const [countries, setCountries] = useState([]);
   const [countryError, setCountryError] = useState('');
-  const [regionCode, setRegionCode] = useState('WLD');
-  const [countryCode, setCountryCode] = useState('');
+  const [regionCode, setRegionCode] = useState('NAC');
+  const [countryCode, setCountryCode] = useState('USA');
   const [subnationalName, setSubnationalName] = useState('');
   const [indicatorData, setIndicatorData] = useState([]);
   const [loadError, setLoadError] = useState('');
@@ -267,7 +256,6 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState(null);
   const [historyYears, setHistoryYears] = useState(10);
-  const [selectedScenario, setSelectedScenario] = useState('baseline');
   const [refreshCount, setRefreshCount] = useState(0);
   const [fxData, setFxData] = useState(null);
   const [fxError, setFxError] = useState('');
@@ -276,7 +264,7 @@ function App() {
   useEffect(() => {
     const handleHashChange = () => {
       const page = window.location.hash.slice(1);
-      setActivePage(['analysis', 'assistant', 'methodology'].includes(page) ? page : 'overview');
+      setActivePage(['analysis', 'methodology', 'about'].includes(page) ? page : 'overview');
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
@@ -289,8 +277,8 @@ function App() {
 
   const selectedCountry = countries.find((country) => country.code === countryCode);
   const selectedRegion = REGIONS.find((region) => region.code === regionCode) || REGIONS[0];
-  const locationCode = selectedCountry?.code || regionCode;
-  const locationName = selectedCountry?.name || selectedRegion.name;
+  const locationCode = selectedCountry?.code || countryCode || regionCode;
+  const locationName = selectedCountry?.name || (countryCode === 'USA' ? 'United States' : selectedRegion.name);
   const geographyName = subnationalName.trim() && selectedCountry
     ? `${subnationalName.trim()}, ${selectedCountry.name}`
     : locationName;
@@ -369,25 +357,7 @@ function App() {
     };
   }, [refreshCount]);
 
-  const scenarioIndicators = useMemo(() => {
-    const adjustments = {
-      recession: { gdpGrowth: -3, unemployment: 2, npl: 1 },
-      trade: { inflation: 1.5, currentAccount: -2 },
-      disaster: { gdpGrowth: -1, inflation: 0.5, unemployment: 0.5 },
-    }[selectedScenario] || {};
-
-    return indicatorData.map((indicator) => {
-      const delta = adjustments[indicator.key];
-      if (!delta || !indicator.latest) return indicator;
-      return {
-        ...indicator,
-        latest: { ...indicator.latest, value: indicator.latest.value + delta },
-      };
-    });
-  }, [indicatorData, selectedScenario]);
-
-  const signal = useMemo(() => getScreeningSignal(scenarioIndicators), [scenarioIndicators]);
-  const baselineSignal = useMemo(() => getScreeningSignal(indicatorData), [indicatorData]);
+  const signal = useMemo(() => getScreeningSignal(indicatorData), [indicatorData]);
   const availableIndicators = useMemo(
     () => INDICATORS.map((indicator) => indicatorData.find((item) => item.key === indicator.key) || indicator),
     [indicatorData],
@@ -408,19 +378,6 @@ function App() {
       : '';
     return `${geographyName} is at a ${getRiskTone(signal.score)} macro-financial screening level (${signal.score.toFixed(1)} / 10) with ${coverage} of ${INDICATORS.length} indicators available. ${driverText} This is a transparent public-source screen, not a forecast or assessment of institutional solvency.`;
   }, [coverage, geographyName, signal]);
-  const analystContext = useMemo(() => ({
-    geography: geographyName,
-    score: signal.score,
-    tone: signal.score === null ? 'unavailable' : getRiskTone(signal.score),
-    drivers: signal.drivers,
-    indicators: availableIndicators.map((indicator) => ({
-      name: indicator.name,
-      latest: indicator.latest,
-      unit: indicator.unit,
-      decimals: indicator.decimals,
-    })),
-    fxDate: fxData?.date || null,
-  }), [availableIndicators, fxData, geographyName, signal]);
   const chartData = useMemo(() => {
     const seriesByYear = new Map();
     indicatorData
@@ -437,7 +394,6 @@ function App() {
   }, [historyYears, indicatorData]);
 
   const countryOptions = getCountryOptions(countries, regionCode);
-  const activeScenario = SCENARIOS.find((scenario) => scenario.id === selectedScenario);
   const sourceStatus = loadError
     ? 'SOURCE ERROR'
     : loading && !coverage
@@ -491,19 +447,26 @@ function App() {
       return;
     }
     const document = new jsPDF();
+    document.setProperties({
+      title: 'U.S. Macro-Financial Screening Brief',
+      author: 'Dr. Sampson Atuahene',
+      subject: 'Public macro-financial screening prototype',
+    });
     document.setFontSize(18);
-    document.text('ATLAS National Economic Resilience Brief', 16, 20);
+    document.text('U.S. Macro-Financial Screening Brief', 16, 20);
     document.setFontSize(10);
     document.text(`Geography: ${geographyName}`, 16, 29);
-    document.text(`Source: World Bank Open Data · retrieved ${lastRefreshed?.toLocaleString() || '—'}`, 16, 36);
-    document.text(`Coverage: ${coverage} of ${INDICATORS.length} indicators · confidence: ${confidence.label}`, 16, 43);
-    document.text(`Screening signal: ${signal.score === null ? 'Insufficient data' : `${signal.score.toFixed(1)} / 10`}`, 16, 50);
+    document.text(`Generated: ${new Date().toLocaleString()}`, 16, 36);
+    document.text(`Source: World Bank Open Data · retrieved ${lastRefreshed?.toLocaleString() || 'Not available'}`, 16, 43);
+    document.text(`Coverage: ${coverage} of ${INDICATORS.length} indicators · confidence: ${confidence.label}`, 16, 50);
+    document.text(`Screening signal: ${signal.score === null ? 'Insufficient data' : `${signal.score.toFixed(1)} / 10`}`, 16, 57);
+    document.text('Prepared by: Dr. Sampson Atuahene · Founder · Mercyhurst University', 16, 64);
     const briefLines = document.splitTextToSize(executiveBrief, 178);
-    document.text(briefLines, 16, 58);
-    let y = 58 + briefLines.length * 5 + 8;
+    document.text(briefLines, 16, 72);
+    let y = 72 + briefLines.length * 5 + 8;
     document.text('Method and caveats:', 16, y);
     y += 7;
-    document.text(document.splitTextToSize('Available indicators are normalized to 0–10 and weighted; weights are renormalized across available observations. This is decision support, not a forecast, credit rating or regulatory assessment.', 178), 16, y);
+    document.text(document.splitTextToSize('Available indicators are normalized to 0–10 and weighted; weights are renormalized across available observations. This public-source screening prototype is the first step toward a proposed U.S. bank early-warning model; it is not a forecast, credit rating or regulatory assessment.', 178), 16, y);
     y += 25;
     availableIndicators.forEach((indicator) => {
       const text = `${indicator.name}: ${indicator.latest ? `${formatValue(indicator, indicator.latest.value)} (${indicator.latest.year})` : 'Not available'}`;
@@ -533,15 +496,15 @@ function App() {
     <div className="app-shell">
       <Toaster position="top-right" />
       <aside className="sidebar">
-        <a className="brand" href="#overview" onClick={() => navigateToPage('overview')} aria-label="ATLAS economic resilience home">
+        <a className="brand" href="#overview" onClick={() => navigateToPage('overview')} aria-label="ATLAS systemic financial risk home">
           <span className="brand-mark"><Landmark size={20} /></span>
-          <span><strong>ATLAS</strong><small>ECONOMIC RESILIENCE</small></span>
+          <span><strong>ATLAS</strong><small>SYSTEMIC FINANCIAL RISK</small></span>
         </a>
         <div className="sidebar-label">WORKSPACE</div>
         <button aria-current={activePage === 'overview' ? 'page' : undefined} className={`nav-link ${activePage === 'overview' ? 'active' : ''}`} onClick={() => navigateToPage('overview')} type="button"><Activity size={17} /> Risk overview</button>
         <button aria-current={activePage === 'analysis' ? 'page' : undefined} className={`nav-link ${activePage === 'analysis' ? 'active' : ''}`} onClick={() => navigateToPage('analysis')} type="button"><TrendingUp size={17} /> Time analysis</button>
-        <button aria-current={activePage === 'assistant' ? 'page' : undefined} className={`nav-link ${activePage === 'assistant' ? 'active' : ''}`} onClick={() => navigateToPage('assistant')} type="button"><Sparkles size={17} /> AI analyst</button>
         <button aria-current={activePage === 'methodology' ? 'page' : undefined} className={`nav-link ${activePage === 'methodology' ? 'active' : ''}`} onClick={() => navigateToPage('methodology')} type="button"><Shield size={17} /> Methodology</button>
+        <button aria-current={activePage === 'about' ? 'page' : undefined} className={`nav-link ${activePage === 'about' ? 'active' : ''}`} onClick={() => navigateToPage('about')} type="button"><Building2 size={17} /> About</button>
         <div className="sidebar-bottom">
           <div className="source-status"><span className="status-dot" /> Public data sources</div>
           <p>Decision support only. Not a credit rating, investment recommendation or substitute for bank policy.</p>
@@ -562,25 +525,27 @@ function App() {
 
         <section className="page-heading">
           <div>
-            <p className="eyebrow">NATIONAL ECONOMIC RESILIENCE MONITOR</p>
+            <p className="eyebrow">U.S. MACRO-FINANCIAL SCREENING PROTOTYPE</p>
             <h1>{activePage === 'analysis'
               ? 'Time horizon analysis'
-              : activePage === 'assistant'
-                ? 'AI analyst'
-                : activePage === 'methodology'
-                  ? 'Methodology & governance'
-                  : 'Executive risk overview'}</h1>
+              : activePage === 'methodology'
+                ? 'Methodology & governance'
+                : activePage === 'about'
+                  ? 'About this project'
+                  : 'U.S. systemic financial risk'}</h1>
             <p className="page-subtitle">{activePage === 'analysis'
               ? 'Explore available reporting horizons without mistaking annual observations for live signals.'
-              : activePage === 'assistant'
-                ? 'Ask questions about the selected geography and the data currently available.'
-                : activePage === 'methodology'
-                  ? 'Review data lineage, model design, limitations and responsible-use controls.'
-                : 'Explainable country, regional and bank-operations intelligence.'}</p>
+              : activePage === 'methodology'
+                ? 'Review data lineage, screening rules, limitations and responsible-use controls.'
+                : activePage === 'about'
+                  ? 'Author, research context, citation, and project status.'
+                  : 'Explainable AI for systemic financial risk, macroeconomic policy and financial stability in the U.S. This public-source screen is the first step toward the proposed bank early-warning model.'}</p>
           </div>
           <div className="updated-label"><Clock3 size={15} />{lastRefreshed ? `Retrieved ${lastRefreshed.toLocaleTimeString()}` : 'Connecting to source'}</div>
         </section>
 
+        {activePage !== 'about' && (
+          <>
         <section className="filter-bar" aria-label="Geography filters">
           <div className="filter-intro"><Globe2 size={18} /><div><strong>Geographic lens</strong><small>Drill from a World Bank region to a country.</small></div></div>
           <label className="filter-control">
@@ -626,6 +591,8 @@ function App() {
             : <span>Country-level indicators for <strong>{selectedCountry.name}</strong>. Add a state or province for your workspace context; public-source data remains national.</span>}
         </div>
         )}
+          </>
+        )}
 
         {activePage === 'overview' && (
           <section className="executive-brief" aria-label="Executive assessment">
@@ -654,7 +621,7 @@ function App() {
         <section className="summary-grid" aria-label="Risk summary">
           <article className={`signal-card ${signal.score === null ? '' : getRiskTone(signal.score)}`}>
             <div className="card-topline"><span>MACRO-FINANCIAL SCREENING SIGNAL</span><ShieldCheck size={18} /></div>
-            <div className="signal-number">{loading && !coverage ? '—' : signal.score === null ? 'N/A' : signal.score.toFixed(1)}<small>{signal.score === null ? '' : '/ 10'}</small></div>
+            <div className="signal-number">{loading && !coverage ? 'Loading' : signal.score === null ? 'N/A' : signal.score.toFixed(1)}<small>{signal.score === null ? '' : '/ 10'}</small></div>
             <div className="signal-foot">{signal.score === null ? 'Insufficient indicator coverage' : `${getRiskTone(signal.score).toUpperCase()} · transparent weighted index`}</div>
             <div className="signal-progress"><span style={{ width: `${signal.score === null ? 0 : signal.score * 10}%` }} /></div>
           </article>
@@ -743,7 +710,7 @@ function App() {
                       <td><strong>{indicator.name}</strong><small>{indicator.description}</small></td>
                       <td><span className="category-tag">{indicator.category}</span></td>
                       <td className="value-cell">{indicator.latest ? formatValue(indicator, indicator.latest.value) : <span className="muted">Unavailable</span>}</td>
-                      <td>{indicator.latest?.year || '—'}</td>
+                      <td>{indicator.latest?.year || 'No data'}</td>
                       <td>{riskValue === null ? <span className="muted">Context only</span> : <span className={`risk-dot-label ${getRiskTone(riskValue)}`}><i />{riskValue.toFixed(1)} / 10</span>}</td>
                       <td><a href={`https://api.worldbank.org/v2/country/${locationCode}/indicator/${indicator.code}?format=json`} target="_blank" rel="noreferrer">{indicator.code}</a></td>
                     </tr>
@@ -808,7 +775,7 @@ function App() {
             <div className="source-row"><span>Provider</span><strong>World Bank Open Data</strong></div>
             <div className="source-row"><span>Geography</span><strong>{geographyName}</strong></div>
             <div className="source-row"><span>Observations available</span><strong>{coverage} of {INDICATORS.length}</strong></div>
-            <div className="source-row"><span>Last retrieved</span><strong>{lastRefreshed?.toLocaleString() || '—'}</strong></div>
+            <div className="source-row"><span>Last retrieved</span><strong>{lastRefreshed?.toLocaleString() || 'Not available'}</strong></div>
             <div className="source-disclaimer">Public indicators are generally annual and may lag current market conditions. This page does not stream prices, FX rates, payments, sanctions or institution-level data.</div>
             <button className="text-button" onClick={exportToPDF}><Download size={14} /> Download risk brief <span>PDF</span></button>
           </section>
@@ -816,28 +783,13 @@ function App() {
 
         <section className="panel scenario-panel">
           <div className="panel-heading">
-            <div><p className="eyebrow">WHAT-IF ANALYSIS</p><h2>Transparent stress scenarios</h2></div>
+            <div><p className="eyebrow">POLICY SCENARIOS · PLANNED</p><h2>Forecast module not implemented</h2></div>
           </div>
-          <div className="scenario-layout">
-            <div className="scenario-options">
-              {SCENARIOS.map((scenario) => (
-                <button className={`scenario-option ${selectedScenario === scenario.id ? 'selected' : ''}`} key={scenario.id} onClick={() => setSelectedScenario(scenario.id)}>
-                  <span className="radio-mark" /><span><strong>{scenario.name}</strong><small>{scenario.description}</small></span>
-                </button>
-              ))}
-            </div>
-            <div className="scenario-result">
-              <span className="eyebrow">ADJUSTED SCREENING SIGNAL</span>
-              <strong>{signal.score === null ? 'N/A' : `${signal.score.toFixed(1)} / 10`}</strong>
-              <p>{activeScenario?.name} · Baseline {baselineSignal.score === null ? 'N/A' : `${baselineSignal.score.toFixed(1)} / 10`}</p>
-              {selectedScenario === 'cyber' && <small>Cyber scenario is qualitative only; macro-financial indicators are unchanged because no cyber dataset is connected.</small>}
-              <small>Scenario deltas are illustrative assumptions applied to reported values; they are not forecasts.</small>
-            </div>
-          </div>
+          <p>The prototype does not yet include FRED/ALFRED forecasts, uncertainty bands, or policy scenarios based on published Federal Reserve stress-test benchmarks. No fixed adjustments or scenario forecasts are shown as results.</p>
         </section>
 
         <footer className="app-footer">
-          <span><Landmark size={14} /> ATLAS ECONOMIC RESILIENCE INTELLIGENCE</span>
+          <span><Landmark size={14} /> ATLAS SYSTEMIC FINANCIAL RISK PROTOTYPE</span>
           <span>Public-source decision support · Not investment advice or a regulatory assessment</span>
         </footer>
           </>
@@ -851,15 +803,16 @@ function App() {
             locationName={geographyName}
           />
         )}
-        {activePage === 'assistant' && <AnalystChat context={analystContext} />}
         {activePage === 'methodology' && (
           <Methodology
             geography={geographyName}
             coverage={coverage}
             indicatorCount={INDICATORS.length}
+            indicators={availableIndicators}
             lastRefreshed={lastRefreshed}
           />
         )}
+        {activePage === 'about' && <About />}
       </main>
     </div>
   );

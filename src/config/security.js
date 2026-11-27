@@ -1,4 +1,4 @@
-// Government National Security Economic Risk Dashboard
+// ATLAS Systemic Financial Risk Prototype
 // Security Configuration
 
 export const SECURITY_CONFIG = {

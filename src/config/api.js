@@ -1,4 +1,4 @@
-// Government National Security Economic Risk Dashboard
+// ATLAS Systemic Financial Risk Prototype
 // API Configuration for Data Sources
 
 export const API_CONFIG = {
